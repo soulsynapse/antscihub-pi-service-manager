@@ -34,15 +34,27 @@ log "User=${REAL_USER} Home=${REAL_HOME} Desktop=${DESKTOP_DIR}"
 
 expand_module_path() {
     local raw_path="$1"
-    if [[ "$raw_path" == "~/"* ]]; then
-        echo "${REAL_HOME}/${raw_path#~/}"
-    elif [[ "$raw_path" == "\$HOME/"* ]]; then
-        echo "${REAL_HOME}/${raw_path#\$HOME/}"
-    elif [[ "$raw_path" == "\${HOME}/"* ]]; then
-        echo "${REAL_HOME}/${raw_path#\${HOME}/}"
-    else
-        echo "$raw_path"
-    fi
+    # Normalize common formatting artifacts from config files.
+    raw_path="${raw_path//$'\r'/}"
+    raw_path="${raw_path#\"}"
+    raw_path="${raw_path%\"}"
+    raw_path="${raw_path#\'}"
+    raw_path="${raw_path%\'}"
+
+    case "$raw_path" in
+        "~/"*)
+            echo "${REAL_HOME}/${raw_path#~/}"
+            ;;
+        "\$HOME/"*)
+            echo "${REAL_HOME}/${raw_path#\$HOME/}"
+            ;;
+        "\${HOME}/"*)
+            echo "${REAL_HOME}/${raw_path#\${HOME}/}"
+            ;;
+        *)
+            echo "$raw_path"
+            ;;
+    esac
 }
 
 install_modules() {
@@ -68,6 +80,12 @@ install_modules() {
 
         local resolved_target
         resolved_target="$(expand_module_path "$target_path")"
+
+        # Safety net: never allow literal ~/ paths to pass through unresolved.
+        if [[ "$resolved_target" == "~/"* ]]; then
+            resolved_target="${REAL_HOME}/${resolved_target#~/}"
+        fi
+
         log "Module target resolved: ${target_path} -> ${resolved_target}"
 
         mkdir -p "$(dirname "${resolved_target}")"

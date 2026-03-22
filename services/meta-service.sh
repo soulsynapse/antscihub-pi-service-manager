@@ -37,7 +37,7 @@ report() {
     local json="$1"
     logger -t "$LOG_TAG" "${event}: ${json}"
     fleet-publish --topic "${TOPIC_PREFIX}" \
-        --json "{\"event\":\"${event}\",${json}}" \
+    --json "{\"event\":\"${event}\",${json}}" \
         2>/dev/null || logger -t "$LOG_TAG" "WARN: fleet-publish failed for ${event}"
 }
 
