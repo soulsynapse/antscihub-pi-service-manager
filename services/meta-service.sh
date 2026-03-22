@@ -10,7 +10,7 @@ set -uo pipefail
 # Reports everything via fleet-publish.
 # =============================================================================
 
-CONF="/opt/antscihub-pi-managed-services/config/meta.conf"
+CONF="/opt/antscihub-pi-service-manager/config/meta.conf"
 LOG_TAG="antscihub-meta"
 
 # --- Load config --------------------------------------------------------------
@@ -84,8 +84,8 @@ boot_update() {
     logger -t "$LOG_TAG" "Boot phase: pulling repos..."
     report "boot_update_start" "\"services_dir\":\"${SERVICES_DIR}\""
 
-    # First, pull antscihub-pi-managed-services itself
-    local self_dir="${SELF_REPO_DIR:-/opt/antscihub-pi-managed-services}"
+    # First, pull antscihub-pi-service-manager itself
+    local self_dir="${SELF_REPO_DIR:-/opt/antscihub-pi-service-manager}"
     if [[ -d "${self_dir}/.git" ]]; then
         local old_head new_head
         old_head=$(git -C "$self_dir" rev-parse HEAD 2>/dev/null || echo "unknown")

@@ -2,12 +2,12 @@
 set -euo pipefail
 
 # =============================================================================
-# antscihub-pi-managed-services installer
+# antscihub-pi-service-manager installer
 # Installs the meta service and bootstraps configured module repos. Safe to re-run.
 # Usage: sudo bash install.sh
 # =============================================================================
 
-INSTALL_DIR="/opt/antscihub-pi-managed-services"
+INSTALL_DIR="/opt/antscihub-pi-service-manager"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 MODULES_FILE="${SCRIPT_DIR}/config/modules.conf"
 
@@ -28,6 +28,7 @@ fi
 REAL_USER="${SUDO_USER:-pi}"
 REAL_HOME=$(eval echo "~${REAL_USER}")
 DESKTOP_DIR="${REAL_HOME}/Desktop"
+MANAGED_SERVICES_DIR="${DESKTOP_DIR}/2-SERVICES-MANAGER"
 
 log "User=${REAL_USER} Home=${REAL_HOME} Desktop=${DESKTOP_DIR}"
 
@@ -109,14 +110,14 @@ install_modules
 log "Installing to ${INSTALL_DIR}..."
 mkdir -p "${INSTALL_DIR}/config"
 mkdir -p "${INSTALL_DIR}/services"
-mkdir -p "${DESKTOP_DIR}"
+mkdir -p "${MANAGED_SERVICES_DIR}"
 
 # Copy everything except .git
 rsync -a --exclude='.git' --exclude='.gitignore' "${SCRIPT_DIR}/" "${INSTALL_DIR}/"
 
 # Set SERVICES_DIR in config if blank
 if grep -q '^SERVICES_DIR=""' "${INSTALL_DIR}/config/meta.conf" 2>/dev/null; then
-    sed -i "s|^SERVICES_DIR=\"\"|SERVICES_DIR=\"${DESKTOP_DIR}\"|" "${INSTALL_DIR}/config/meta.conf"
+    sed -i "s|^SERVICES_DIR=\"\"|SERVICES_DIR=\"${MANAGED_SERVICES_DIR}\"|" "${INSTALL_DIR}/config/meta.conf"
 fi
 
 # Set SELF_REPO_DIR in config if blank.
@@ -166,13 +167,13 @@ fleet-publish --topic "fleet/managed-services/$(hostname)/install" \
 # --- Done ---------------------------------------------------------------------
 
 log "============================================"
-log " antscihub-pi-managed-services installed!"
+log " antscihub-pi-service-manager installed!"
 log ""
 log " Config:  ${INSTALL_DIR}/config/meta.conf"
 log " Logs:    journalctl -t antscihub-meta -f"
 log " Status:  systemctl status antscihub-meta"
 log ""
 log " To add a managed service, place a folder"
-log " in ${DESKTOP_DIR}/ with an"
+log " in ${MANAGED_SERVICES_DIR}/ with an"
 log " antscihub.manifest file. See README."
 log "============================================"

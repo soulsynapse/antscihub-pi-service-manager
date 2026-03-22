@@ -5,7 +5,7 @@ Wants=network-online.target
 
 [Service]
 Type=simple
-ExecStart=/opt/antscihub-pi-managed-services/services/meta-service.sh
+ExecStart=/opt/antscihub-pi-service-manager/services/meta-service.sh
 Restart=always
 RestartSec=10
 WatchdogSec=120
