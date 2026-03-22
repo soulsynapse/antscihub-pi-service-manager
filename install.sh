@@ -77,11 +77,22 @@ install_modules() {
                 warn "Failed to update ${resolved_target}; continuing"
             fi
         elif [[ -e "${resolved_target}" ]]; then
-            warn "Target exists but is not a git repo, skipping: ${resolved_target}"
+            # Allow cloning into a pre-created but empty directory.
+            if [[ -d "${resolved_target}" ]] && [[ -z "$(find "${resolved_target}" -mindepth 1 -maxdepth 1 2>/dev/null)" ]]; then
+                log "Cloning module into existing empty dir: ${repo_url} -> ${resolved_target}"
+                if ! git clone "${repo_url}" "${resolved_target}" >/dev/null 2>&1; then
+                    warn "Failed to clone ${repo_url} into ${resolved_target}; continuing"
+                    continue
+                fi
+            else
+                warn "Target exists and is not a git repo, skipping: ${resolved_target}"
+                warn "If this path should be managed, remove or rename it, then re-run install.sh"
+                continue
+            fi
         else
             log "Cloning module: ${repo_url} -> ${resolved_target}"
             if ! git clone "${repo_url}" "${resolved_target}" >/dev/null 2>&1; then
-                warn "Failed to clone ${repo_url}; continuing"
+                warn "Failed to clone ${repo_url} into ${resolved_target}; continuing"
                 continue
             fi
         fi
