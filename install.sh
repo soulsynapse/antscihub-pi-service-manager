@@ -34,10 +34,12 @@ log "User=${REAL_USER} Home=${REAL_HOME} Desktop=${DESKTOP_DIR}"
 
 expand_module_path() {
     local raw_path="$1"
-    if [[ "$raw_path" == ~/* ]]; then
+    if [[ "$raw_path" == "~/"* ]]; then
         echo "${REAL_HOME}/${raw_path#~/}"
-    elif [[ "$raw_path" == "\$HOME"/* ]]; then
+    elif [[ "$raw_path" == "\$HOME/"* ]]; then
         echo "${REAL_HOME}/${raw_path#\$HOME/}"
+    elif [[ "$raw_path" == "\${HOME}/"* ]]; then
+        echo "${REAL_HOME}/${raw_path#\${HOME}/}"
     else
         echo "$raw_path"
     fi
