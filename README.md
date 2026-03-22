@@ -7,8 +7,8 @@ A single meta-service that monitors and maintains other services on a Raspberry 
 From any Pi (via fleet shell or SSH):
 
 ```bash
-sudo git clone https://github.com/soulsynapse/antscihub-pi-service-manager.git ~/Desktop/2-SERVICES-MANAGER/antscihub-pi-service-manager
-sudo bash ~/Desktop/2-SERVICES-MANAGER/antscihub-pi-service-manager/install.sh
+sudo git clone https://github.com/soulsynapse/antscihub-pi-service-manager.git ~/Desktop/2-SERVICE-MANAGER/antscihub-pi-service-manager
+sudo bash ~/Desktop/2-SERVICE-MANAGER/antscihub-pi-service-manager/install.sh
 ```
 
 During install, module repos listed in `config/modules.conf` are also cloned or updated.
@@ -23,7 +23,7 @@ During install, module repos listed in `config/modules.conf` are also cloned or 
 
 A meta service runs on every Pi in the fleet. It is installed at `/opt/antscihub-pi-service-manager/`. Its job is:
 
-1. On every boot, scan `~/Desktop/2-SERVICES-MANAGER/` for managed service folders.
+1. On every boot, scan `~/Desktop/` for managed service folders.
 2. `git pull` each one.
 3. If code changed, run the service's install command.
 4. Continuously (every 30s) ensure each service's systemd unit is running.
@@ -33,27 +33,29 @@ A meta service runs on every Pi in the fleet. It is installed at `/opt/antscihub
 
 You do not need to touch the meta service. You only need to make your repo conform to the contract below.
 
-By default, managed repos are placed under `~/Desktop/2-SERVICES-MANAGER/`.
+By default, this manager repo can live under `~/Desktop/2-SERVICE-MANAGER/`, and managed services can live in any top-level folder under `~/Desktop/`.
 If you want a different base path, update `SERVICES_DIR` in `/opt/antscihub-pi-service-manager/config/meta.conf` and restart `antscihub-meta`.
 
 Self-update is enabled by default. `install.sh` sets `SELF_REPO_DIR` in `/opt/antscihub-pi-service-manager/config/meta.conf` to the git-backed folder you installed from, and the meta service runs `git pull --ff-only` there on boot.
 
 Module bootstrap is enabled by default. `install.sh` reads `config/modules.conf` and for each `REPO_URL|TARGET_PATH` entry it clones the repo if missing, or runs `git pull --ff-only` if already present.
 
+Modules can live outside `2-SERVICE-MANAGER` (for example in `~/Desktop/3-SYSTEM/`). That is not a problem for module installation. Only repos under `SERVICES_DIR` are monitored by the meta service.
+
 Default module file example:
 
 ```text
-https://github.com/soulsynapse/antscihub-pi-wifi-watchdog|~/Desktop/2-SERVICES-MANAGER/wifi-watchdog
+https://github.com/soulsynapse/antscihub-pi-wifi-watchdog|~/Desktop/3-SYSTEM/wifi-watchdog
 ```
 
 ---
 
 ## How to Make Your Repo a Managed Service
 
-### 1. Clone into `~/Desktop/2-SERVICES-MANAGER/<your-folder-name>/`
+### 1. Clone into `~/Desktop/<your-folder-name>/`
 
 ```bash
-git clone https://github.com/org/your-repo.git ~/Desktop/2-SERVICES-MANAGER/your-repo
+git clone https://github.com/org/your-repo.git ~/Desktop/your-repo
 ```
 
 This is the default configured by `install.sh`. You can choose a different base folder by changing `SERVICES_DIR` in `meta.conf`.
@@ -120,7 +122,7 @@ GIT_BRANCH=main
 ### On Boot
 
 0. Pull `SELF_REPO_DIR` (meta-service repo) and re-run `install.sh` if changed.
-1. Find `~/Desktop/2-SERVICES-MANAGER/your-repo/antscihub.manifest`.
+1. Find `~/Desktop/your-repo/antscihub.manifest`.
 2. Read `GIT_REMOTE`.
 3. Run `git pull --ff-only`.
 4. If `HEAD` changed:
@@ -130,7 +132,7 @@ GIT_BRANCH=main
 
 ### Continuously (Every 30 Seconds)
 
-1. Find `~/Desktop/2-SERVICES-MANAGER/your-repo/antscihub.manifest`.
+1. Find `~/Desktop/your-repo/antscihub.manifest`.
 2. Read `SERVICE_NAME`.
 3. Run `systemctl is-active SERVICE_NAME`.
 4. If active: move on.
