@@ -27,7 +27,7 @@ CHECK_INTERVAL="${CHECK_INTERVAL:-30}"
 RESTART_THRESHOLD="${RESTART_THRESHOLD:-3}"
 MAX_RESTART_ATTEMPTS="${MAX_RESTART_ATTEMPTS:-5}"
 PULL_ON_BOOT="${PULL_ON_BOOT:-true}"
-TOPIC_PREFIX="${MQTT_TOPIC_PREFIX:-fleet/services}/${DEVICE_ID}/meta"
+TOPIC_PREFIX="${MQTT_TOPIC_PREFIX:-fleet/managed-services}/${DEVICE_ID}/meta"
 
 # --- Helpers ------------------------------------------------------------------
 
