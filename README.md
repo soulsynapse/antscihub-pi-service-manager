@@ -13,6 +13,14 @@ sudo bash ~/Desktop/2-SERVICE-MANAGER/antscihub-pi-service-manager/install.sh
 
 During install, module repos listed in `config/modules.conf` are also cloned or updated.
 
+To update
+
+```bash
+sudo git -C ~/Desktop/2-SERVICE-MANAGER/antscihub-pi-service-manager pull --ff-only
+sudo bash ~/Desktop/2-SERVICE-MANAGER/antscihub-pi-service-manager/install.sh
+```
+
+
 ## Agent Instructions for Downstream Services and Repos
 
 ---
