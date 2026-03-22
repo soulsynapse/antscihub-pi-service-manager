@@ -42,8 +42,9 @@ expand_module_path() {
     raw_path="${raw_path%\'}"
 
     case "$raw_path" in
-        "~/"*)
-            echo "${REAL_HOME}/${raw_path#~/}"
+        ~/*)
+            # Use substring expansion to skip the first 2 characters (~/)
+            echo "${REAL_HOME}/${raw_path:2}"
             ;;
         "\$HOME/"*)
             echo "${REAL_HOME}/${raw_path#\$HOME/}"
@@ -82,8 +83,9 @@ install_modules() {
         resolved_target="$(expand_module_path "$target_path")"
 
         # Safety net: never allow literal ~/ paths to pass through unresolved.
-        if [[ "$resolved_target" == "~/"* ]]; then
-            resolved_target="${REAL_HOME}/${resolved_target#~/}"
+        if [[ "$resolved_target" == ~/* ]]; then
+            # Use substring expansion to skip the first 2 characters (~/)
+            resolved_target="${REAL_HOME}/${resolved_target:2}"
         fi
 
         log "Module target resolved: ${target_path} -> ${resolved_target}"
