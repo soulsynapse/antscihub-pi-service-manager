@@ -59,6 +59,11 @@ notify_watchdog() {
     fi
 }
 
+fix_permissions() {
+    local dir="$1"
+    find "$dir" -name "*.sh" -exec chmod +x {} \; 2>/dev/null || true
+}
+
 report() {
     local event="$1"
     shift
@@ -135,6 +140,7 @@ boot_update() {
 
         notify_watchdog
         if git -C "$self_dir" pull --ff-only 2>&1 | logger -t "$LOG_TAG"; then
+            fix_permissions "$self_dir"
             new_head=$(git -C "$self_dir" rev-parse HEAD 2>/dev/null || echo "unknown")
             if [[ "$old_head" != "$new_head" ]]; then
                 report "self_update_done" "\"success\":true,\"old\":\"${old_head:0:8}\",\"new\":\"${new_head:0:8}\",\"source\":\"${self_dir}\""
@@ -183,6 +189,7 @@ boot_update() {
 
         notify_watchdog
         if git -C "$dir" pull --ff-only 2>&1 | logger -t "$LOG_TAG"; then
+            fix_permissions "$dir"
             new_head=$(git -C "$dir" rev-parse HEAD 2>/dev/null || echo "unknown")
 
             if [[ "$old_head" != "$new_head" ]]; then
