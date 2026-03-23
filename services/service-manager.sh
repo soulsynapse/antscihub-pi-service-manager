@@ -132,7 +132,6 @@ pull_repo() {
 }
 
 mqtt_send() {
-    # Send JSON to the persistent MQTT coprocess
     echo "$1" >&"$MQTT_FD" 2>/dev/null || logger -t "$LOG_TAG" "WARN: mqtt_send failed"
 }
 
@@ -208,6 +207,84 @@ run_install() {
     fi
 }
 
+# --- Clone missing modules from modules.conf ---------------------------------
+
+clone_missing_modules() {
+    local modules_conf="${SELF_REPO_DIR}/config/modules.conf"
+
+    if [[ ! -f "$modules_conf" ]]; then
+        logger -t "$LOG_TAG" "No modules.conf found at ${modules_conf}"
+        return
+    fi
+
+    # Resolve the real user home for ~ expansion
+    local real_user real_home
+    real_user=$(getent passwd | awk -F: '$3 >= 1000 && $3 < 60000 {print $1; exit}')
+    real_home=$(eval echo "~${real_user}")
+
+    logger -t "$LOG_TAG" "Checking modules.conf for new repos..."
+
+    while IFS='|' read -r repo_url target_path; do
+        [[ "$repo_url" =~ ^[[:space:]]*# ]] && continue
+        [[ -z "${repo_url// /}" ]] && continue
+
+        repo_url=$(echo "$repo_url" | xargs)
+        target_path=$(echo "$target_path" | xargs)
+        [[ -z "$target_path" ]] && continue
+
+        # Expand ~ and $HOME
+        case "$target_path" in
+            '~/'*)
+                target_path="${real_home}/${target_path:2}"
+                ;;
+            "\$HOME/"*)
+                target_path="${real_home}/${target_path#\$HOME/}"
+                ;;
+            "\${HOME}/"*)
+                target_path="${real_home}/${target_path#\${HOME}/}"
+                ;;
+        esac
+
+        # Already cloned?
+        if [[ -d "${target_path}/.git" ]]; then
+            continue
+        fi
+
+        logger -t "$LOG_TAG" "New module: cloning ${repo_url} → ${target_path}"
+        notify_watchdog
+
+        mkdir -p "$(dirname "$target_path")"
+
+        if git clone "$repo_url" "$target_path" 2>&1 | logger -t "$LOG_TAG"; then
+            report "module_cloned" "\"success\":true,\"repo\":\"${repo_url}\",\"path\":\"${target_path}\""
+            fix_permissions "$target_path"
+
+            # Fix ownership
+            if id -u "${real_user}" >/dev/null 2>&1; then
+                chown -R "${real_user}:${real_user}" "${target_path}" 2>/dev/null || true
+            fi
+
+            # Run install if manifest exists
+            if [[ -f "${target_path}/antscihub.manifest" ]]; then
+                local -A new_manifest
+                parse_manifest "${target_path}/antscihub.manifest" new_manifest
+
+                local install_cmd="${new_manifest[INSTALL_CMD]:-}"
+                local svc="${new_manifest[SERVICE_NAME]:-}"
+                local folder_name
+                folder_name=$(basename "$target_path")
+
+                if [[ -n "$install_cmd" && "$install_cmd" != "$SERVICE_NONE" ]]; then
+                    run_install "$target_path" "$install_cmd" "$folder_name" "$svc" "first_install"
+                fi
+            fi
+        else
+            report "module_cloned" "\"success\":false,\"repo\":\"${repo_url}\",\"path\":\"${target_path}\""
+        fi
+
+    done < "$modules_conf"
+}
+
 # --- State tracking -----------------------------------------------------------
 
 declare -A FAIL_COUNTS
@@ -249,6 +326,9 @@ boot_update() {
     else
         logger -t "$LOG_TAG" "Self-update repo not found at ${self_dir}; skipping"
     fi
+
+    # Clone any new modules from modules.conf
+    clone_missing_modules
 
     # Managed services
     local dirs

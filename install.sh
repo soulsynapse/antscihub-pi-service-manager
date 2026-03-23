@@ -62,6 +62,33 @@ expand_module_path() {
     esac
 }
 
+run_module_install() {
+    local module_dir="$1"
+
+    if [[ ! -f "${module_dir}/antscihub.manifest" ]]; then
+        return
+    fi
+
+    local install_cmd=""
+    while IFS='=' read -r mkey mval; do
+        [[ "$mkey" =~ ^[[:space:]]*# ]] && continue
+        [[ -z "$mkey" ]] && continue
+        mkey=$(echo "$mkey" | xargs)
+        mval=$(echo "$mval" | xargs)
+        if [[ "$mkey" == "INSTALL_CMD" ]]; then
+            install_cmd="$mval"
+        fi
+    done < "${module_dir}/antscihub.manifest"
+
+    if [[ -n "$install_cmd" ]]; then
+        log "Running install for $(basename "${module_dir}"): ${install_cmd}"
+        find "${module_dir}" -name "*.sh" -exec chmod +x {} + 2>/dev/null || true
+        if ! (cd "${module_dir}" && bash -c "$install_cmd"); then
+            warn "Install failed for $(basename "${module_dir}")"
+        fi
+    fi
+}
+
 install_modules() {
     if [[ ! -f "${MODULES_FILE}" ]]; then
         warn "No modules file at ${MODULES_FILE}; skipping module bootstrap"
@@ -101,22 +128,24 @@ install_modules() {
         elif [[ -e "${resolved_target}" ]]; then
             if [[ -d "${resolved_target}" ]] && [[ -z "$(find "${resolved_target}" -mindepth 1 -maxdepth 1 2>/dev/null)" ]]; then
                 log "Cloning module into existing empty dir: ${repo_url} -> ${resolved_target}"
+                rmdir "${resolved_target}" 2>/dev/null || true
                 if ! git clone "${repo_url}" "${resolved_target}"; then
                     warn "Failed to clone ${repo_url} into ${resolved_target}; continuing"
                     continue
                 fi
+                run_module_install "${resolved_target}"
             else
                 warn "Target exists and is not a git repo, skipping: ${resolved_target}"
                 warn "If this path should be managed, remove or rename it, then re-run install.sh"
                 continue
             fi
         else
-            mkdir -p "${resolved_target}"
             log "Cloning module: ${repo_url} -> ${resolved_target}"
             if ! git clone "${repo_url}" "${resolved_target}"; then
                 warn "Failed to clone ${repo_url} into ${resolved_target}; continuing"
                 continue
             fi
+            run_module_install "${resolved_target}"
         fi
 
         if id -u "${REAL_USER}" >/dev/null 2>&1; then
