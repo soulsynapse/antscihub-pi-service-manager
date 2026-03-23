@@ -17,6 +17,8 @@ RESTART_THRESHOLD="${RESTART_THRESHOLD:-3}"
 MAX_RESTART_ATTEMPTS="${MAX_RESTART_ATTEMPTS:-5}"
 PULL_ON_BOOT="${PULL_ON_BOOT:-true}"
 
+readonly SERVICE_NONE="none"
+
 find_mqtt_dir() {
     for candidate in \
         "/home/*/Desktop/1-MQTT" \
@@ -68,8 +70,9 @@ logger -t "$LOG_TAG" "Notified systemd: ready"
 # --- Start persistent MQTT connection -----------------------------------------
 
 logger -t "$LOG_TAG" "Starting MQTT helper..."
-coproc MQTT_PROC { "$VENV_PYTHON" "$MQTT_HELPER" 2>&1 | logger -t "${LOG_TAG}[mqtt]"; }
-MQTT_PID=$MQTT_PROC_PID
+coproc MQTT { "$VENV_PYTHON" "$MQTT_HELPER" 2>&1 | logger -t "$LOG_TAG"; }
+MQTT_FD=${MQTT[1]}
+MQTT_PID=$!
 
 sleep 3
 
@@ -117,7 +120,7 @@ pull_repo() {
 
 mqtt_send() {
     # Send JSON to the persistent MQTT coprocess
-    echo "$1" >&"${MQTT_PROC[1]}" 2>/dev/null || logger -t "$LOG_TAG" "WARN: mqtt_send failed"
+    echo "$1" >&"$MQTT_FD" 2>/dev/null || logger -t "$LOG_TAG" "WARN: mqtt_send failed"
 }
 
 report() {
@@ -181,7 +184,7 @@ run_install() {
     notify_watchdog
     if (cd "$dir" && bash -c "$install_cmd") 2>&1 | logger -t "$LOG_TAG"; then
         report "service_install_done" "\"success\":true,\"service\":\"${folder_name}\",\"cmd\":\"${install_cmd}\",\"reason\":\"${reason}\""
-        if [[ -n "$svc" && "$svc" != "none" ]]; then
+        if [[ -n "$svc" && "$svc" != "$SERVICE_NONE" ]]; then
             systemctl restart "$svc" 2>&1 | logger -t "$LOG_TAG" || true
         fi
         return 0
@@ -269,15 +272,15 @@ boot_update() {
             if [[ "$old_head" != "$new_head" ]]; then
                 report "service_update_done" "\"success\":true,\"service\":\"${folder_name}\",\"old\":\"${old_head:0:8}\",\"new\":\"${new_head:0:8}\""
 
-                if [[ -n "$install_cmd" && "$install_cmd" != "none" ]]; then
+                if [[ -n "$install_cmd" && "$install_cmd" != "$SERVICE_NONE" ]]; then
                     run_install "$dir" "$install_cmd" "$folder_name" "$svc" "update"
                 fi
             else
                 logger -t "$LOG_TAG" "${folder_name}: up to date (${old_head:0:8})"
 
-                if [[ -n "$svc" && "$svc" != "none" ]] && ! systemctl cat "$svc" &>/dev/null; then
+                if [[ -n "$svc" && "$svc" != "$SERVICE_NONE" ]] && ! systemctl cat "$svc" &>/dev/null; then
                     logger -t "$LOG_TAG" "${folder_name}: service not installed, running install"
-                    if [[ -n "$install_cmd" && "$install_cmd" != "none" ]]; then
+                    if [[ -n "$install_cmd" && "$install_cmd" != "$SERVICE_NONE" ]]; then
                         run_install "$dir" "$install_cmd" "$folder_name" "$svc" "first_install"
                     fi
                 fi
@@ -310,7 +313,7 @@ check_services() {
         local folder_name
         folder_name=$(basename "$dir")
 
-        if [[ -z "$svc" || "$svc" == "none" ]]; then
+        if [[ -z "$svc" || "$svc" == "$SERVICE_NONE" ]]; then
             continue
         fi
 
