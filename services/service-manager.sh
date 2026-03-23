@@ -108,9 +108,9 @@ parse_manifest() {
 
 discover_services() {
     local found=()
-    for dir in "${SERVICES_DIR}"/*/; do
-        [[ -f "${dir}antscihub.manifest" ]] && found+=("$dir")
-    done
+    while IFS= read -r manifest; do
+        found+=("$(dirname "$manifest")/")
+    done < <(find "${SERVICES_DIR}" -name "antscihub.manifest" -type f 2>/dev/null)
     echo "${found[@]}"
 }
 
