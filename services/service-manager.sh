@@ -36,11 +36,12 @@ MQTT_DIR=$(find_mqtt_dir) || {
     exit 1
 }
 
-RESPONSE_TOPIC="fleet/response/${DEVICE_ID}"
+VENV_PYTHON="${MQTT_DIR}/venv/bin/python3"
+MQTT_HELPER="/opt/antscihub-pi-service-manager/services/mqtt_helper.py"
 
 logger -t "$LOG_TAG" "MQTT_DIR=${MQTT_DIR}"
 
-# --- Systemd notify helpers ---------------------------------------------------
+# --- Systemd notify -----------------------------------------------------------
 
 notify_ready() {
     systemd-notify --ready 2>/dev/null || true
@@ -64,20 +65,39 @@ done
 notify_ready
 logger -t "$LOG_TAG" "Notified systemd: ready"
 
+# --- Start persistent MQTT connection -----------------------------------------
+
+logger -t "$LOG_TAG" "Starting MQTT helper..."
+coproc MQTT_PROC { "$VENV_PYTHON" "$MQTT_HELPER" 2>&1 | logger -t "${LOG_TAG}[mqtt]"; }
+MQTT_PID=$MQTT_PROC_PID
+
+sleep 3
+
+if ! kill -0 "$MQTT_PID" 2>/dev/null; then
+    logger -t "$LOG_TAG" "FATAL: MQTT helper failed to start"
+    exit 1
+fi
+
+logger -t "$LOG_TAG" "MQTT helper running (pid ${MQTT_PID})"
+
+cleanup() {
+    kill "$MQTT_PID" 2>/dev/null || true
+    wait "$MQTT_PID" 2>/dev/null || true
+}
+trap cleanup EXIT
+
 # --- Helpers ------------------------------------------------------------------
 
 fix_permissions() {
     local dir="$1"
-    find "$dir" -name "*.sh" -exec chmod +x {} \; 2>/dev/null || true
+    find "$dir" -name "*.sh" -exec chmod +x {} + 2>/dev/null || true
 }
 
-# Clean local git changes (chmod diffs etc) so pull doesn't fail
 clean_repo() {
     local dir="$1"
     git -C "$dir" checkout -- . 2>/dev/null || true
 }
 
-# Pull a git repo with automatic recovery
 pull_repo() {
     local dir="$1"
     clean_repo "$dir"
@@ -85,7 +105,6 @@ pull_repo() {
         fix_permissions "$dir"
         return 0
     fi
-    # First attempt failed — try harder
     logger -t "$LOG_TAG" "Pull failed for ${dir}, resetting and retrying"
     git -C "$dir" reset --hard HEAD 2>/dev/null || true
     git -C "$dir" clean -fd 2>/dev/null || true
@@ -96,6 +115,11 @@ pull_repo() {
     return 1
 }
 
+mqtt_send() {
+    # Send JSON to the persistent MQTT coprocess
+    echo "$1" >&"${MQTT_PROC[1]}" 2>/dev/null || logger -t "$LOG_TAG" "WARN: mqtt_send failed"
+}
+
 report() {
     local event="$1"
     shift
@@ -104,22 +128,23 @@ report() {
     timestamp=$(date +%s.%3N)
 
     logger -t "$LOG_TAG" "${event}: ${extra_json}"
-
-    fleet-publish \
-        --topic "${RESPONSE_TOPIC}" \
-        --json "{\"schema\":\"fleet.service-manager.v1\",\"event\":\"${event}\",\"device_id\":\"${DEVICE_ID}\",\"timestamp\":${timestamp},${extra_json}}" \
-        2>/dev/null || logger -t "$LOG_TAG" "WARN: report failed for ${event}"
+    mqtt_send "{\"schema\":\"fleet.service-manager.v1\",\"event\":\"${event}\",\"device_id\":\"${DEVICE_ID}\",\"timestamp\":${timestamp},${extra_json}}"
 }
 
 report_status() {
     local json_payload="$1"
-    local timestamp
-    timestamp=$(date +%s.%3N)
+    report "status" "${json_payload}"
+}
 
-    fleet-publish \
-        --topic "${RESPONSE_TOPIC}" \
-        --json "{\"schema\":\"fleet.service-manager.v1\",\"event\":\"status\",\"device_id\":\"${DEVICE_ID}\",\"timestamp\":${timestamp},${json_payload}}" \
-        2>/dev/null || logger -t "$LOG_TAG" "WARN: status report failed"
+array_to_json() {
+    local -n arr_ref="$1"
+    if [[ ${#arr_ref[@]} -eq 0 ]]; then
+        echo "[]"
+        return
+    fi
+    local json_array
+    json_array=$(printf '"%s",' "${arr_ref[@]}")
+    echo "[${json_array%,}]"
 }
 
 parse_manifest() {
@@ -250,7 +275,6 @@ boot_update() {
             else
                 logger -t "$LOG_TAG" "${folder_name}: up to date (${old_head:0:8})"
 
-                # If service should exist but isn't installed, run install
                 if [[ -n "$svc" && "$svc" != "none" ]] && ! systemctl cat "$svc" &>/dev/null; then
                     logger -t "$LOG_TAG" "${folder_name}: service not installed, running install"
                     if [[ -n "$install_cmd" && "$install_cmd" != "none" ]]; then
@@ -352,23 +376,13 @@ check_services() {
         fi
     done
 
-    local managed_json="[]"
-    if [[ ${#managed[@]} -gt 0 ]]; then
-        managed_json=$(printf '"%s",' "${managed[@]}")
-        managed_json="[${managed_json%,}]"
-    fi
+    local managed_json
+    local healthy_json
+    local unhealthy_json
 
-    local healthy_json="[]"
-    if [[ ${#healthy[@]} -gt 0 ]]; then
-        healthy_json=$(printf '"%s",' "${healthy[@]}")
-        healthy_json="[${healthy_json%,}]"
-    fi
-
-    local unhealthy_json="[]"
-    if [[ ${#unhealthy[@]} -gt 0 ]]; then
-        unhealthy_json=$(printf '"%s",' "${unhealthy[@]}")
-        unhealthy_json="[${unhealthy_json%,}]"
-    fi
+    managed_json=$(array_to_json managed)
+    healthy_json=$(array_to_json healthy)
+    unhealthy_json=$(array_to_json unhealthy)
 
     report_status "\"managed\":${managed_json},\"healthy\":${healthy_json},\"unhealthy\":${unhealthy_json}"
 }
