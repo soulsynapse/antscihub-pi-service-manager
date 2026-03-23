@@ -131,11 +131,24 @@ boot_update() {
     logger -t "$LOG_TAG" "Boot phase: pulling repos..."
     report "boot_update_start" "\"services_dir\":\"${SERVICES_DIR}\""
 
+boot_update() {
+    if [[ "$PULL_ON_BOOT" != "true" ]]; then
+        logger -t "$LOG_TAG" "PULL_ON_BOOT disabled, skipping repo updates"
+        return
+    fi
+
+    logger -t "$LOG_TAG" "Boot phase: pulling repos..."
+    report "boot_update_start" "\"services_dir\":\"${SERVICES_DIR}\""
+
     # First, pull antscihub-pi-service-manager itself
     local self_dir="${SELF_REPO_DIR:-/opt/antscihub-pi-service-manager}"
     if [[ -d "${self_dir}/.git" ]]; then
         local old_head new_head
         old_head=$(git -C "$self_dir" rev-parse HEAD 2>/dev/null || echo "unknown")
+
+        # Reset any local changes before pulling
+        git -C "$self_dir" reset --hard HEAD 2>/dev/null || true
+        git -C "$self_dir" clean -fd 2>/dev/null || true
 
         if git -C "$self_dir" pull --ff-only 2>&1 | logger -t "$LOG_TAG"; then
             new_head=$(git -C "$self_dir" rev-parse HEAD 2>/dev/null || echo "unknown")
@@ -182,6 +195,10 @@ boot_update() {
 
         local old_head new_head
         old_head=$(git -C "$dir" rev-parse HEAD 2>/dev/null || echo "unknown")
+
+        # Reset any local changes before pulling
+        git -C "$dir" reset --hard HEAD 2>/dev/null || true
+        git -C "$dir" clean -fd 2>/dev/null || true
 
         if git -C "$dir" pull --ff-only 2>&1 | logger -t "$LOG_TAG"; then
             new_head=$(git -C "$dir" rev-parse HEAD 2>/dev/null || echo "unknown")
