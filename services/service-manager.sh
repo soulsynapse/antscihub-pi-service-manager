@@ -136,8 +136,6 @@ boot_update() {
         local old_head new_head
         old_head=$(git -C "$self_dir" rev-parse HEAD 2>/dev/null || echo "unknown")
 
-        git -C "$self_dir" reset --hard HEAD 2>/dev/null || true
-
         notify_watchdog
         if git -C "$self_dir" pull --ff-only 2>&1 | logger -t "$LOG_TAG"; then
             fix_permissions "$self_dir"
@@ -185,8 +183,6 @@ boot_update() {
         local old_head new_head
         old_head=$(git -C "$dir" rev-parse HEAD 2>/dev/null || echo "unknown")
 
-        git -C "$dir" reset --hard HEAD 2>/dev/null || true
-
         notify_watchdog
         if git -C "$dir" pull --ff-only 2>&1 | logger -t "$LOG_TAG"; then
             fix_permissions "$dir"
@@ -212,6 +208,7 @@ boot_update() {
                 fi
             else
                 logger -t "$LOG_TAG" "${folder_name}: up to date (${old_head:0:8})"
+                fix_permissions "$dir"
 
                 # If service isn't installed yet, run install anyway
                 if [[ -n "$svc" && "$svc" != "none" ]] && ! systemctl list-unit-files "$svc" &>/dev/null; then
