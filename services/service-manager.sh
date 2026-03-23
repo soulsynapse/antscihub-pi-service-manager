@@ -210,13 +210,16 @@ boot_update() {
                 logger -t "$LOG_TAG" "${folder_name}: up to date (${old_head:0:8})"
                 fix_permissions "$dir"
 
-                # If service isn't installed yet, run install anyway
-                if [[ -n "$svc" && "$svc" != "none" ]] && ! systemctl list-unit-files "$svc" &>/dev/null; then
+                # If service should exist but isn't installed, run install
+                if [[ -n "$svc" && "$svc" != "none" ]] && ! systemctl cat "$svc" &>/dev/null; then
                     logger -t "$LOG_TAG" "${folder_name}: service not installed, running install"
                     if [[ -n "$install_cmd" && "$install_cmd" != "none" ]]; then
                         notify_watchdog
                         if (cd "$dir" && bash -c "$install_cmd") 2>&1 | logger -t "$LOG_TAG"; then
                             report "service_install_done" "\"success\":true,\"service\":\"${folder_name}\",\"cmd\":\"${install_cmd}\",\"reason\":\"first_install\""
+                            if [[ -n "$svc" && "$svc" != "none" ]]; then
+                                systemctl start "$svc" 2>&1 | logger -t "$LOG_TAG" || true
+                            fi
                         else
                             report "service_install_done" "\"success\":false,\"service\":\"${folder_name}\",\"cmd\":\"${install_cmd}\",\"exit_code\":$?"
                         fi
