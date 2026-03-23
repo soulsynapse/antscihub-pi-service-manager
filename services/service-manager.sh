@@ -114,6 +114,12 @@ discover_services() {
     echo "${found[@]}"
 }
 
+notify_watchdog() {
+    if [ -n "${WATCHDOG_USEC:-}" ]; then
+        systemd-notify WATCHDOG=1 2>/dev/null || true
+    fi
+}
+
 # --- Associative arrays for tracking state ------------------------------------
 
 declare -A FAIL_COUNTS
@@ -128,6 +134,7 @@ boot_update() {
         return
     fi
 
+    notify_watchdog
     logger -t "$LOG_TAG" "Boot phase: pulling repos..."
     report "boot_update_start" "\"services_dir\":\"${SERVICES_DIR}\""
 
@@ -162,6 +169,7 @@ boot_update() {
     dirs=$(discover_services)
 
     for dir in $dirs; do
+        notify_watchdog
         local -A manifest
         parse_manifest "${dir}antscihub.manifest" manifest
 
@@ -236,6 +244,7 @@ boot_update() {
 # --- Main loop: monitor services ----------------------------------------------
 
 check_services() {
+    notify_watchdog
     local dirs
     dirs=$(discover_services)
 
@@ -352,6 +361,7 @@ boot_update
 
 # Monitor loop
 while true; do
+    notify_watchdog
     check_services
     sleep "$CHECK_INTERVAL"
 done
