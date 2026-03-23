@@ -181,8 +181,6 @@ boot_update() {
             continue
         fi
 
-        report "service_update_start" "\"service\":\"${folder_name}\""
-
         local old_head new_head
         old_head=$(git -C "$dir" rev-parse HEAD 2>/dev/null || echo "unknown")
 
@@ -193,7 +191,8 @@ boot_update() {
             new_head=$(git -C "$dir" rev-parse HEAD 2>/dev/null || echo "unknown")
 
             if [[ "$old_head" != "$new_head" ]]; then
-                report "service_update_done" "\"success\":true,\"service\":\"${folder_name}\",\"old\":\"${old_head:0:8}\",\"new\":\"${new_head:0:8}\""
+                report "service_update_start" "{\"service\": \"${folder_name}\"}"
+                report "service_update_done" "{\"success\": true, \"service\": \"${folder_name}\", \"old\": \"${old_head:0:8}\", \"new\": \"${new_head:0:8}\"}"
 
                 if [[ -n "$install_cmd" && "$install_cmd" != "none" ]]; then
                     logger -t "$LOG_TAG" "Running install for ${folder_name}: ${install_cmd}"
