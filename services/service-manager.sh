@@ -26,11 +26,6 @@ if [[ -z "${SERVICES_DIR:-}" ]]; then
     logger -t "$LOG_TAG" "SERVICES_DIR not set, resolved to ${SERVICES_DIR}"
 fi
 
-# Run commands as the real user, not root
-run_as_user() {
-    runuser -u "$REAL_USER" -- "$@"
-}
-
 # Resolve SELF_REPO_DIR dynamically if not set in config
 if [[ -z "${SELF_REPO_DIR:-}" ]]; then
     SELF_REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -126,20 +121,20 @@ fix_permissions() {
 
 clean_repo() {
     local dir="$1"
-    run_as_user git -C "$dir" checkout -- . 2>/dev/null || true
+    git -C "$dir" checkout -- . 2>/dev/null || true
 }
 
 pull_repo() {
     local dir="$1"
     clean_repo "$dir"
-    if run_as_user git -C "$dir" pull --ff-only 2>&1 | logger -t "$LOG_TAG"; then
+    if git -C "$dir" pull --ff-only 2>&1 | logger -t "$LOG_TAG"; then
         fix_permissions "$dir"
         return 0
     fi
     logger -t "$LOG_TAG" "Pull failed for ${dir}, resetting and retrying"
-    run_as_user git -C "$dir" reset --hard HEAD 2>/dev/null || true
-    run_as_user git -C "$dir" clean -fd 2>/dev/null || true
-    if run_as_user git -C "$dir" pull --ff-only 2>&1 | logger -t "$LOG_TAG"; then
+    git -C "$dir" reset --hard HEAD 2>/dev/null || true
+    git -C "$dir" clean -fd 2>/dev/null || true
+    if git -C "$dir" pull --ff-only 2>&1 | logger -t "$LOG_TAG"; then
         fix_permissions "$dir"
         return 0
     fi
@@ -277,7 +272,7 @@ clone_missing_modules() {
 
         mkdir -p "$(dirname "$target_path")"
 
-        if run_as_user git clone "$repo_url" "$target_path" 2>&1 | logger -t "$LOG_TAG"; then
+        if git clone "$repo_url" "$target_path" 2>&1 | logger -t "$LOG_TAG"; then
             report "module_cloned" "\"success\":true,\"repo\":\"${repo_url}\",\"path\":\"${target_path}\""
             fix_permissions "$target_path"
 
@@ -331,11 +326,11 @@ boot_update() {
     local self_dir="${SELF_REPO_DIR:-/opt/antscihub-pi-service-manager}"
     if [[ -d "${self_dir}/.git" ]]; then
         local old_head new_head
-        old_head=$(run_as_user git -C "$self_dir" rev-parse HEAD 2>/dev/null || echo "unknown")
+        old_head=$(git -C "$self_dir" rev-parse HEAD 2>/dev/null || echo "unknown")
 
         notify_watchdog
         if pull_repo "$self_dir"; then
-            new_head=$(run_as_user git -C "$self_dir" rev-parse HEAD 2>/dev/null || echo "unknown")
+            new_head=$(git -C "$self_dir" rev-parse HEAD 2>/dev/null || echo "unknown")
             if [[ "$old_head" != "$new_head" ]]; then
                 report "self_update_done" "\"success\":true,\"old\":\"${old_head:0:8}\",\"new\":\"${new_head:0:8}\",\"source\":\"${self_dir}\""
                 logger -t "$LOG_TAG" "Self-updated, re-running install.sh..."
@@ -381,11 +376,11 @@ boot_update() {
             continue
         fi
             local old_head new_head
-        old_head=$(run_as_user git -C "$dir" rev-parse HEAD 2>/dev/null || echo "unknown")
+        old_head=$(git -C "$dir" rev-parse HEAD 2>/dev/null || echo "unknown")
 
         notify_watchdog
         if pull_repo "$dir"; then
-            new_head=$(run_as_user git -C "$dir" rev-parse HEAD 2>/dev/null || echo "unknown")
+            new_head=$(git -C "$dir" rev-parse HEAD 2>/dev/null || echo "unknown")
 
             if [[ "$old_head" != "$new_head" ]]; then
                 report "service_update_done" "\"success\":true,\"service\":\"${folder_name}\",\"old\":\"${old_head:0:8}\",\"new\":\"${new_head:0:8}\""
